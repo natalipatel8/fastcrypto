@@ -4,6 +4,7 @@
 
 use super::*;
 use crate::encoding::Encoding;
+use crate::traits::Authenticator;
 use crate::{
     ed25519::{
         Ed25519AggregateSignature, Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey,
@@ -405,6 +406,11 @@ fn test_to_from_bytes_aggregate_signatures() {
     let serialized = sig.as_bytes();
     let deserialized = Ed25519AggregateSignature::from_bytes(serialized).unwrap();
     assert_eq!(deserialized.as_ref(), sig.as_ref());
+
+    // Construct serialization with invalid length
+    let mut invalid_serialized = [0u8; 3 * Ed25519Signature::LENGTH + 1];
+    invalid_serialized[..3 * Ed25519Signature::LENGTH].copy_from_slice(serialized);
+    assert!(Ed25519AggregateSignature::from_bytes(&invalid_serialized).is_err());
 }
 
 #[test]

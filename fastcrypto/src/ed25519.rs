@@ -442,6 +442,11 @@ impl AsRef<[u8]> for Ed25519AggregateSignature {
 
 impl ToFromBytes for Ed25519AggregateSignature {
     fn from_bytes(bytes: &[u8]) -> Result<Self, FastCryptoError> {
+        // Signatures are stored as chunks, so the length must be divisible by the lenght of a single signature.
+        if bytes.len() % ED25519_SIGNATURE_LENGTH != 0 {
+            return Err(FastCryptoError::InputLengthWrong(bytes.len()));
+        }
+
         let sigs = bytes
             .chunks_exact(ED25519_SIGNATURE_LENGTH)
             .into_iter()
