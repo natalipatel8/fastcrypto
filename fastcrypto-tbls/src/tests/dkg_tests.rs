@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::dkg::{Party, PkiNode};
+use crate::dkg::{Party, PkiNode, Weight};
 use crate::ecies;
 use crate::random_oracle::RandomOracle;
 use crate::tbls::ThresholdBls;
@@ -32,10 +32,7 @@ fn setup_party(
 ) -> Party<G, EG> {
     let nodes = keys
         .iter()
-        .map(|(id, _sk, pk)| PkiNode::<EG> {
-            id: *id,
-            pk: pk.clone(),
-        })
+        .map(|(id, _sk, pk)| PkiNode::<EG>::new(*id, pk.clone(), Weight::new(1).unwrap()).unwrap())
         .collect();
     Party::<G, EG>::new(
         keys.get(id - 1).unwrap().1.clone(),

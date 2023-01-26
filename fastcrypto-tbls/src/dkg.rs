@@ -16,6 +16,7 @@ use fastcrypto::groups::{GroupElement, HashToGroupElement};
 use fastcrypto::traits::AllowedRng;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::num::NonZeroU32;
 
 /// Generics below use `G: GroupElement' for the group of the VSS public key, and `EG: GroupElement'
 /// for the group of the ECIES public key.
@@ -25,10 +26,12 @@ use std::collections::{HashMap, HashSet};
 /// PKI node, with a unique id and its encryption public key.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PkiNode<EG: GroupElement> {
-    pub id: ShareIndex,
-    pub pk: ecies::PublicKey<EG>,
+    id: ShareIndex,
+    pk: ecies::PublicKey<EG>,
+    weight: Weight,
 }
 
+pub type Weight = NonZeroU32;
 pub type Nodes<EG> = Vec<PkiNode<EG>>;
 
 /// Party in the DKG protocol.
@@ -417,5 +420,26 @@ where
             &encrypted_share.encryption,
         )?;
         Self::deserialize_and_check_share(buffer.as_slice(), id, vss_pk)
+    }
+}
+
+impl<EG: GroupElement> PkiNode<EG> {
+    pub fn new(
+        id: ShareIndex,
+        pk: ecies::PublicKey<EG>,
+        weight: Weight,
+    ) -> Result<Self, FastCryptoError> {
+        if id.checked_add(weight.get()).is_none() {
+            return Err(FastCryptoError::InvalidInput);
+        }
+        Ok(Self { id, pk, weight })
+    }
+
+    pub fn share_ids_iter(&self) -> impl Iterator<Item = ShareIndex> + '_ {
+        (0..self.weight.get()).map(|i| {
+            self.id
+                .checked_add(i)
+                .expect("Checked for overflow in new()")
+        })
     }
 }
