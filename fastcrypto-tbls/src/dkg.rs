@@ -70,13 +70,16 @@ pub struct FirstMessage<G: GroupElement, EG: GroupElement> {
 #[derive(Clone, PartialEq, Eq)]
 pub enum Complaint<EG: GroupElement> {
     /// The identity of the sender.
-    NoShare(ShareIndex),
+    NoShare { sender: ShareIndex },
     /// The identity of the sender and the recovery package.
     // An alternative to using ECIES & ZKPoK for complaints is to use different ECIES public key
     // for each sender, and in case of a complaint, simply reveal the relevant secret key.
     // This saves the ZKPoK with the price of publishing one ECIES public key & PoP for each party,
     // resulting in larger communication in the happy-path.
-    InvalidEncryptedShare(ShareIndex, RecoveryPackage<EG>),
+    InvalidEncryptedShare {
+        sender: ShareIndex,
+        package: RecoveryPackage<EG>,
+    },
 }
 
 /// A [DkgSecondMessage] is sent during the second phase of the protocol. It includes complaints
@@ -223,9 +226,9 @@ where
                 .find(|n| n.receiver == my_id);
             // No share for me.
             if encrypted_share.is_none() {
-                next_message
-                    .complaints
-                    .push(Complaint::NoShare(message.sender));
+                next_message.complaints.push(Complaint::NoShare {
+                    sender: message.sender,
+                });
                 continue;
             }
             // Else, decrypt it.
@@ -242,16 +245,16 @@ where
                 Err(_) => {
                     next_message
                         .complaints
-                        .push(Complaint::InvalidEncryptedShare(
-                            message.sender,
-                            self.ecies_sk.create_recovery_package(
+                        .push(Complaint::InvalidEncryptedShare {
+                            sender: message.sender,
+                            package: self.ecies_sk.create_recovery_package(
                                 &encrypted_share
                                     .expect("checked above that is not None")
                                     .encryption,
                                 &self.random_oracle.extend("ecies"),
                                 rng,
                             ),
-                        ));
+                        });
                 }
             }
         }
@@ -290,8 +293,8 @@ where
         'outer: for m2 in second_messages {
             'inner: for complaint in &m2.complaints[..] {
                 let accused = match complaint {
-                    Complaint::NoShare(l) => *l,
-                    Complaint::InvalidEncryptedShare(l, _) => *l,
+                    Complaint::NoShare { sender: l } => *l,
+                    Complaint::InvalidEncryptedShare { sender: l, .. } => *l,
                 };
                 // Ignore senders that are already not relevant, or invalid complaints.
                 if !shares.contains_key(&accused) {
@@ -309,11 +312,14 @@ where
                         .iter()
                         .find(|s| s.receiver == accuser);
                     match complaint {
-                        Complaint::NoShare(_) => {
+                        Complaint::NoShare { sender: _ } => {
                             // Check if there is a share.
                             encrypted_share.is_none()
                         }
-                        Complaint::InvalidEncryptedShare(_accused, recovery_pkg) => {
+                        Complaint::InvalidEncryptedShare {
+                            sender: _,
+                            package: recovery_pkg,
+                        } => {
                             if let Some(sh) = encrypted_share {
                                 Self::check_delegated_key_and_share(
                                     recovery_pkg,
