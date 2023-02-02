@@ -121,7 +121,7 @@ impl Display for UnsecurePublicKey {
     }
 }
 
-serialize_deserialize_with_to_from_bytes!(UnsecurePublicKey);
+serialize_deserialize_with_to_from_bytes!(UnsecurePublicKey, PUBLIC_KEY_LENGTH);
 
 impl Verifier<UnsecureSignature> for UnsecurePublicKey {
     fn verify(&self, msg: &[u8], signature: &UnsecureSignature) -> Result<(), signature::Error> {
@@ -209,7 +209,7 @@ impl Authenticator for UnsecureSignature {
     const LENGTH: usize = 0;
 }
 
-serialize_deserialize_with_to_from_bytes!(UnsecureSignature);
+serialize_deserialize_with_to_from_bytes!(UnsecureSignature, SIGNATURE_LENGTH);
 
 ///
 /// Implement SigningKey
@@ -236,7 +236,7 @@ impl SigningKey for UnsecurePrivateKey {
     const LENGTH: usize = PRIVATE_KEY_LENGTH;
 }
 
-serialize_deserialize_with_to_from_bytes!(UnsecurePrivateKey);
+serialize_deserialize_with_to_from_bytes!(UnsecurePrivateKey, PRIVATE_KEY_LENGTH);
 
 ///
 /// Implement KeyPair
@@ -315,7 +315,7 @@ impl FromStr for UnsecureKeyPair {
     }
 }
 
-serialize_deserialize_with_to_from_bytes!(UnsecureKeyPair);
+serialize_deserialize_with_to_from_bytes!(UnsecureKeyPair, PRIVATE_KEY_LENGTH);
 
 ///
 /// Implement AggregateAuthenticator. Aggregate signatures are implemented as xor's of the individual signatures.

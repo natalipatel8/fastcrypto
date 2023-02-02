@@ -21,7 +21,7 @@ rust_secp256k1 = { version = "0.24.1", package = "secp256k1", features = ["recov
 serde.workspace = true
 serde_bytes = "0.11.8"
 serde_with = "2.1.0"
-serde-big-array = { version = "0.4.1", optional = true }
+serde-big-array = "0.4.1"
 signature = { version = "1.6.4", features = ["rand-preview"] }
 tokio = { version = "1.24.1", features = ["sync", "rt", "macros"] }
 zeroize.workspace = true
@@ -48,8 +48,8 @@ readonly = "0.2.3"
 sha2 = "0.10.6"
 sha3.workspace = true
 thiserror = "1.0.38"
-twox-hash = { version = "1.6.3", optional = true }
-schemars ="0.8.10"
+twox-hash = "1.6.3"
+schemars = "0.8.10"
 bincode.workspace = true
 elliptic-curve = {version = "0.12.3", features = ["hash2curve"]}
 
@@ -72,7 +72,7 @@ required-features = ["experimental"]
 default = ["secure"]
 secure = []
 copy_key = []
-unsecure_schemes = ["dep:twox-hash", "dep:serde-big-array"]
+unsecure_schemes = []
 no-threads-blst = ["blst/no-threads"]
 experimental = []
 

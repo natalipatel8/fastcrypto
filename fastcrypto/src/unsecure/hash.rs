@@ -11,7 +11,6 @@ use crate::hash::{Digest, HashFunction};
 /// XXH3 hash function.
 ///
 /// Warning: This is NOT a cryptographic hash function and should NOT be used in production.
-#[cfg(feature = "unsecure_schemes")]
 #[derive(Default)]
 pub struct XXH3Unsecure {
     instance: twox_hash::xxh3::Hash64,
@@ -37,7 +36,6 @@ impl HashFunction<8> for XXH3Unsecure {
 /// XXH128 hash function.
 ///
 /// Warning: This is NOT a cryptographic hash function and should NOT be used in production.
-#[cfg(feature = "unsecure_schemes")]
 #[derive(Default)]
 pub struct XXH128Unsecure {
     instance: twox_hash::xxh3::Hash128,
@@ -64,7 +62,6 @@ impl HashFunction<16> for XXH128Unsecure {
 /// Xxh128 digest of the data.
 ///
 /// Warning: This is NOT a cryptographic hash function and should NOT be used in production.
-#[cfg(feature = "unsecure_schemes")]
 #[derive(Default)]
 pub struct Fast256HashUnsecure {
     instance: twox_hash::xxh3::Hash128,
