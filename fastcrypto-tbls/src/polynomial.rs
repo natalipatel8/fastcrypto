@@ -155,6 +155,7 @@ impl<C: Scalar> Poly<C> {
 
     /// Commits the scalar polynomial to the group and returns a polynomial over
     /// the group.
+    // TODO: Use a batch multiplication (e.g., mult_wbits) to improve efficiency.
     pub fn commit<P: GroupElement<ScalarType = C>>(&self) -> Poly<P> {
         let commits = self
             .0

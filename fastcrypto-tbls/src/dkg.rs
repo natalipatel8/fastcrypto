@@ -21,14 +21,11 @@ use std::num::NonZeroU32;
 /// Generics below use `G: GroupElement' for the group of the VSS public key, and `EG: GroupElement'
 /// for the group of the ECIES public key.
 
-// TODO: Add weights to PkiNode, and change the DKG accordingly.
-
-/// PKI node, with a unique id and its encryption public key.
+/// PKI node, with a unique encryption public key and a weight.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PkiNode<EG: GroupElement> {
-    id: ShareIndex,
-    pk: ecies::PublicKey<EG>,
-    weight: Weight,
+    pub pk: ecies::PublicKey<EG>,
+    pub weight: Weight,
 }
 
 pub type Weight = NonZeroU32;
@@ -37,7 +34,7 @@ pub type Nodes<EG> = Vec<PkiNode<EG>>;
 /// Party in the DKG protocol.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Party<G: GroupElement, EG: GroupElement> {
-    id: ShareIndex,
+    ids: Vec<ShareIndex>,
     nodes: Nodes<EG>,
     ecies_sk: ecies::PrivateKey<EG>,
     ecies_pk: ecies::PublicKey<EG>,
@@ -132,16 +129,23 @@ where
             .iter()
             .find(|n| n.pk == ecies_pk)
             .ok_or(FastCryptoError::InvalidInput)?;
-
-        // Generate a secret polynomial and commit to it.
-        if threshold >= nodes.len() as u32 {
+        // Check that the share ids are continuous, no duplicates, etc.
+        let total_weight = nodes.iter().try_fold(1, |sum, n| {
+            if sum != n.id.get() {
+                return None;
+            }
+            Some(sum + n.weight.get())
+        });
+        if total_weight.is_none() || threshold > total_weight.expect("Checked for None already") {
             return Err(FastCryptoError::InvalidInput);
         }
+
+        // Generate a secret polynomial and commit to it.
         let vss_sk = PrivatePoly::<G>::rand(threshold - 1, rng);
         let vss_pk = vss_sk.commit::<G>();
 
         Ok(Self {
-            id: curr_node.id,
+            ids: curr_node.share_ids().collect(),
             nodes,
             ecies_sk,
             ecies_pk,
@@ -158,31 +162,37 @@ where
 
     /// 4. Create the first message to be broadcasted.
     pub fn create_first_message<R: AllowedRng>(&self, rng: &mut R) -> FirstMessage<G, EG> {
+        let first_id = *self.ids.get(0).expect("There is at least one id");
         let encrypted_shares = self
             .nodes
             .iter()
-            .filter(|n| n.id != self.id)
+            .filter(|n| n.id != first_id)
             .map(|n| {
-                let share = self.vss_sk.eval(n.id);
-                let buff = bincode::serialize(&share.value)
-                    .expect("serialize of a share should never fail");
-                let encryption = n.pk.encrypt(&buff, rng);
-                EncryptedShare {
-                    receiver: n.id,
-                    encryption,
-                }
+                n.share_ids()
+                    .map(|sid| {
+                        let share = self.vss_sk.eval(sid);
+                        let buff = bincode::serialize(&share.value)
+                            .expect("serialize of a share should never fail");
+                        let encryption = n.pk.encrypt(&buff, rng);
+                        EncryptedShare {
+                            receiver: n.id,
+                            encryption,
+                        }
+                    })
+                    .collect::<Vec<_>>()
             })
+            .flatten()
             .collect();
 
         FirstMessage {
-            sender: self.id,
+            sender: first_id,
             encrypted_shares,
             vss_pk: self.vss_pk.clone(),
         }
     }
 
-    /// 5. Process the first messages of exactly 'threshold' nodes and create the second message to
-    ///    be broadcasted.
+    /// 5. Process the first messages of at least 'threshold' weights and create the second message
+    ///    to be broadcasted.
     ///    The second message contains the list of complaints on invalid shares. In addition, it
     ///    returns a set of valid shares (so far).
     ///    Since we assume that at most t-1 of the nodes are malicious, we only need messages from
@@ -193,19 +203,33 @@ where
         messages: &[FirstMessage<G, EG>],
         rng: &mut R,
     ) -> Result<(SharesMap<G>, SecondMessage<EG>), FastCryptoError> {
-        if messages.len() != self.threshold as usize {
-            return Err(FastCryptoError::InputLengthWrong(self.threshold as usize));
-        }
+        // Check for duplicate senders.
         let num_of_unique_senders = messages
             .iter()
             .map(|m| m.sender)
             .collect::<HashSet<_>>()
             .len();
         if num_of_unique_senders != messages.len() {
-            return Err(FastCryptoError::InputTooShort(num_of_unique_senders));
+            return Err(FastCryptoError::InvalidInput);
+        }
+        // Check that the messages are from at least threshold nodes.
+        let id_to_node = self
+            .nodes
+            .iter()
+            .map(|n| (n.id, n))
+            .collect::<HashMap<_, _>>();
+        let sum_of_weights = messages.iter().try_fold(0, |sum, m| {
+            id_to_node
+                .get(&m.sender)
+                .and_then(|&n| Some(sum + n.weight.get()))
+        });
+        if sum_of_weights.is_none()
+            || sum_of_weights.expect("Already checked that if none") < self.threshold
+        {
+            return Err(FastCryptoError::InputLengthWrong(self.threshold as usize));
         }
 
-        let my_id = self.id;
+        let my_ids = self.share_ids();
         let mut shares = HashMap::new(); // Will include only valid shares.
         let mut next_message = SecondMessage {
             sender: my_id,
@@ -435,7 +459,7 @@ impl<EG: GroupElement> PkiNode<EG> {
         Ok(Self { id, pk, weight })
     }
 
-    pub fn share_ids_iter(&self) -> impl Iterator<Item = ShareIndex> + '_ {
+    pub fn share_ids(&self) -> impl Iterator<Item = ShareIndex> + '_ {
         (0..self.weight.get()).map(|i| {
             self.id
                 .checked_add(i)
